@@ -2,9 +2,10 @@ options:
   port:
     type: string
     default: "8080"
-    description: "Listen port (-p) passed to flask run."
-  channel:
+    description: "Listen port passed to uvicorn."
+  hostname:
     type: string
-    default: "edge"
-    description: "Channel for microsample snap."
+    default: "0.0.0.0"
+    description: "Listen hostname passed to uvicorn."
+
 

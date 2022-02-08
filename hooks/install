@@ -5,22 +5,12 @@
 # failing to account for a debconf question on a dependency, or trying to pull
 # from github without installing git first.
 
-channel=$(config-get channel)
-
-status-set maintenance "installing snap"
-
-apt update
-printf "Y\n8\n1\n" | apt install snapd  # set to Europe/Amsterdam
-
-sleep 1
-
-service snapd start
-systemctl start snapd.service
-alias snap=/usr/bin/snap
-
-status-set maintenance "installing microsample snap"
-
-snap install microsample --${channel}
+A=$(snap info microsample | grep -c 'installed')
+if [[ $A -ne 1 ]]
+then
+  status-set maintenance "installing microsample snap"
+  snap install microsample --edge;
+fi
 
 status-set active
 
