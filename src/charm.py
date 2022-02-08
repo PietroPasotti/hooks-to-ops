@@ -38,7 +38,7 @@ class Microsample(CharmBase):
 
         framework = self.framework
 
-        # don't do this at home
+        # don't do this at home; really, do not.
         for hook_name in os.listdir(f"{HOOKS_DIR}"):
             snake_case_hook = dash_to_underscore(hook_name)
             framework.observe(
