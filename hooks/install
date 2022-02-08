@@ -7,6 +7,17 @@
 
 channel=$(config-get channel)
 
+status-set maintenance "installing snap"
+
+apt update
+printf "Y\n8\n1\n" | apt install snapd  # set to Europe/Amsterdam
+
+sleep 1
+
+service snapd start
+systemctl start snapd.service
+alias snap=/usr/bin/snap
+
 status-set maintenance "installing microsample snap"
 
 snap install microsample --${channel}
