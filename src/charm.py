@@ -11,16 +11,14 @@ from charms.operator_libs_linux.v0 import systemd
 from ops.main import main
 from ops.charm import CharmBase
 from subprocess import check_call, PIPE, Popen, check_output
-import pathlib
 
 from ops.model import MaintenanceStatus, ActiveStatus, BlockedStatus, Relation
 
 logger = getLogger("Microsample")
 
 
-def get_output(cmd):
-    process = Popen(cmd, stdout=PIPE)
-    return process.communicate()[0].decode('ascii')
+def get_output(cmd: str) -> str:
+    return check_output(cmd.split(' ')).decode('ascii')
 
 
 class Microsample(CharmBase):
@@ -63,27 +61,25 @@ class Microsample(CharmBase):
             time.sleep(.5)
 
     def _get_microsample_version(self):
-        snap_info = get_output("snap info microsample")
-
-        def is_version_line(line: str):
-            return line.startswith('installed:')
-
-        flipped_snapinfo_lines = reversed(snap_info.split('\n'))
         try:
-            version_info = next(filter(is_version_line, flipped_snapinfo_lines))
-        except StopIteration:
+            snap_info = get_output('snap list microsample')
+        except subprocess.CalledProcessError:
             raise RuntimeError('microsample not installed')
 
-        # version_info format (example) at this stage:
+        version_info = snap_info.split('\n')
+        assert len(version_info) == 2, 'multiple microsample snaps installed'
+        version_line = version_info[1]
+        # version_line format (example) at this stage:
         # 'installed:          v1.21.9                    (2946) 191MB classic'
-        version = next(islice(filter(None, version_info.split(' ')), 1, None))
+        version = next(islice(filter(None, version_line.split(' ')), 1, None))
         return version
 
     def _on_install(self, _event):
-        snap_info = get_output('snap info microsample')
-        if not "installed:" in snap_info:
+        try:
+            get_output('snap list microsample')
+        except subprocess.CalledProcessError:
             self.unit.status = MaintenanceStatus('installing microsample')
-            out = check_call("snap install microsample --edge")
+            get_output("snap install microsample --edge")
 
         self.wait_service_active()
         self.unit.status = ActiveStatus()
@@ -91,8 +87,8 @@ class Microsample(CharmBase):
     def _on_config_changed(self, _event):  # noqa
         address, port = self.private_address, self.port
 
-        check_call(f'snap set microsample port={port}'.split(' '))
-        check_call(f'snap set microsample address={address}'.split(' '))
+        get_output(f'snap set microsample port={port}')
+        get_output(f'snap set microsample address={address}')
 
         # ensure all opened ports are closed #idempotence
         open_ports = get_output('opened-ports')
@@ -103,7 +99,6 @@ class Microsample(CharmBase):
         check_call(["open-port", port])
 
         # restart the service
-        # check_call(["systemctl restart snap.microsample.microsample.service"])
         systemd.service_restart("snap.microsample.microsample.service")
 
     def _on_start(self, _event):  # noqa
@@ -119,7 +114,7 @@ class Microsample(CharmBase):
         assert len(data) == 16, f'microsample not installed, or ' \
                                 f'too many versions are. {data}'
         snap_version = data[-5]
-        check_call(f"application-version-set {snap_version}")
+        get_output(f"application-version-set {snap_version}")
 
     def _on_update_status(self, _event):  # noqa
         # this call should probably be put in install/upgrade, since the
