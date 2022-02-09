@@ -87,7 +87,7 @@ class Microsample(CharmBase):
 
         # ensure all opened ports are closed #idempotence
         open_ports = get_output('opened-ports')
-        for open_port in open_ports.split('\n'):
+        for open_port in filter(None, open_ports.split('\n')):
             check_call(["close-port", open_port])
 
         # ensure only the port we need is
