@@ -111,7 +111,7 @@ class Microsample(CharmBase):
     def _update_app_version():
         raw = get_output("snap list microsample")
         data = tuple(filter(None, raw.replace('\n', ' ').split(' ')))
-        assert len(data) == 16, f'microsample not installed, or ' \
+        assert len(data) == 12, f'microsample not installed, or ' \
                                 f'too many versions are. {data}'
         snap_version = data[-5]
         get_output(f"application-version-set {snap_version}")
