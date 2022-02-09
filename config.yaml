@@ -2,10 +2,10 @@ options:
   port:
     type: string
     default: "8080"
-    description: "Listen port passed to uvicorn."
+    description: "Listen port for the webserver."
   hostname:
     type: string
     default: "0.0.0.0"
-    description: "Listen hostname passed to uvicorn."
+    description: "Listen hostname for the webserver."
 
 

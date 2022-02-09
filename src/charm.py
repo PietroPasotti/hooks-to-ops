@@ -28,6 +28,7 @@ def get_output(cmd):
 class Microsample(CharmBase):
     _service_name = "snap.microsample.microsample.service"
     _default_port = 8080
+    _default_host = '0.0.0.0'
 
     def __init__(self, *args):
         super().__init__(*args)
@@ -58,6 +59,10 @@ class Microsample(CharmBase):
     def port(self) -> int:
         return self.config.get('port', self._default_port)
 
+    @property
+    def host(self) -> str:
+        return self.config.get('host', self._default_host)
+
     def wait_service_active(self):
         """sleep until service becomes active"""
         self.unit.status = MaintenanceStatus('waiting for service to come up')
@@ -65,21 +70,8 @@ class Microsample(CharmBase):
             time.sleep(.5)
 
     def _get_microsample_version(self):
-        snap_info = get_output("snap info microsample")
-
-        def is_version_line(line: str):
-            return line.startswith('installed:')
-
-        flipped_snapinfo_lines = reversed(snap_info.split('\n'))
-        try:
-            version_info = next(filter(is_version_line, flipped_snapinfo_lines))
-        except StopIteration:
-            raise RuntimeError('microsample not installed')
-
-        # version_info format (example) at this stage:
-        # 'installed:          v1.21.9                    (2946) 191MB classic'
-        version = next(islice(filter(None, version_info.split(' ')), 1, None))
-        return version
+        microsample_snap = snap.SnapCache()["microsample"]
+        return microsample_snap.channel
 
     def _on_install(self, _event):
         microsample_snap = snap.SnapCache()["microsample"]
@@ -93,8 +85,8 @@ class Microsample(CharmBase):
     def _on_config_changed(self, _event):  # noqa
         address, port = self.private_address, self.port
 
-        check_call([f'snap set microsample port={port}',
-                    f'snap set microsample address={address}'])
+        check_call(f'snap set microsample port={port}'.split(' '))
+        check_call(f'snap set microsample address={address}'.split(' '))
 
         # ensure all opened ports are closed #idempotence
         open_ports = get_output('opened-ports')
@@ -105,7 +97,6 @@ class Microsample(CharmBase):
         check_call(["open-port", port])
 
         # restart the service
-        # check_call(["systemctl restart snap.microsample.microsample.service"])
         systemd.service_restart("snap.microsample.microsample.service")
 
     def _on_start(self, _event):  # noqa
@@ -172,8 +163,8 @@ class Microsample(CharmBase):
 
         services_spec = {
             '_service_name': 'microsample',
-            'service_host': '0.0.0.0',
-            'service_port': 8080,
+            'service_host': self.host,
+            'service_port': self.port,
             'service_options': [
                 'mode http', 'balance leastconn',
                 'http-check expect rstring ^Online$'],
