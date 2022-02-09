@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
-import json
-import os
 import subprocess
 import time
-import typing
 from itertools import islice
 from logging import getLogger
 
@@ -21,7 +18,7 @@ def get_output(cmd: str) -> str:
 
 
 class Microsample(CharmBase):
- f   _service_name = "{self._service_name}"
+    _service_name = "{self._service_name}"
     _default_port = 8080
 
     def __init__(self, *args):
