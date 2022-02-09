@@ -80,13 +80,8 @@ class Microsample(CharmBase):
         return version
 
     def _on_install(self, _event):
-        snapinfo_cmd = Popen('snap info microsample'.split(' '),
-                             stdout=subprocess.PIPE)
-        output = check_output("grep -c 'installed'".split(' '),
-                              stdin=snapinfo_cmd.stdout)
-        is_microsample_installed = bool(output.decode('ascii').strip())
-
-        if not is_microsample_installed:
+        snap_info = get_output('snap info microsample')
+        if not "installed:" in snap_info:
             self.unit.status = MaintenanceStatus('installing microsample')
             out = check_call("snap install microsample --edge")
 
@@ -96,12 +91,12 @@ class Microsample(CharmBase):
     def _on_config_changed(self, _event):  # noqa
         address, port = self.private_address, self.port
 
-        check_call([f'snap set microsample port={port}',
-                    f'snap set microsample address={address}'])
+        check_call(f'snap set microsample port={port}'.split(' '))
+        check_call(f'snap set microsample address={address}'.split(' '))
 
         # ensure all opened ports are closed #idempotence
         open_ports = get_output('opened-ports')
-        for open_port in open_ports.split('\n'):
+        for open_port in filter(None, open_ports.split('\n')):
             check_call(["close-port", open_port])
 
         # ensure only the port we need is
