@@ -80,8 +80,11 @@ class Microsample(CharmBase):
         return version
 
     def _on_install(self, _event):
-        out = check_call("snap info microsample | grep -c 'installed'")
-        is_microsample_installed = bool(out.decode('ascii').strip())
+        snapinfo_cmd = Popen('snap info microsample'.split(' '),
+                             stdout=subprocess.PIPE)
+        output = check_output("grep -c 'installed'".split(' '),
+                              stdin=snapinfo_cmd.stdout)
+        is_microsample_installed = bool(output.decode('ascii').strip())
 
         if not is_microsample_installed:
             self.unit.status = MaintenanceStatus('installing microsample')
