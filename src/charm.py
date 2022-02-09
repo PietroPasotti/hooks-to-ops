@@ -83,10 +83,9 @@ class Microsample(CharmBase):
         self.unit.status = ActiveStatus()
 
     def _on_config_changed(self, _event):  # noqa
-        address, port = self.private_address, self.port
-
-        check_call(f'snap set microsample port={port}'.split(' '))
-        check_call(f'snap set microsample address={address}'.split(' '))
+        port = self.port
+        microsample_snap = snap.SnapCache()["microsample"]
+        microsample_snap.set({'port': port, 'address': self.private_address})
 
         # ensure all opened ports are closed #idempotence
         open_ports = get_output('opened-ports')
