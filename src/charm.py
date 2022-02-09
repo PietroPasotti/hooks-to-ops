@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-import json
-import os
-import subprocess
 import time
-import typing
-from itertools import islice
 from logging import getLogger
 
 from charms.operator_libs_linux.v0 import systemd
@@ -15,6 +10,7 @@ from subprocess import check_call, check_output
 from ops.model import MaintenanceStatus, ActiveStatus, BlockedStatus, Relation
 
 from charms.operator_libs_linux.v1 import snap
+
 
 logger = getLogger("Microsample")
 
