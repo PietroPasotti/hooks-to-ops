@@ -17,7 +17,7 @@ Branches:
 [tutorial-a-tiny-hooks-charm]: https://discourse.jujucharms.com/t/tutorial-a-tiny-hooks-charm/1315
 [interface:http]: [https://discourse.jujucharms.com/t/interface-layers/1121]
 
-[0-hooks]:[https://github.com/PietroPasotti/hooks-to-ops/tree/0-hooks]
-[1-sh-charm]:[https://github.com/PietroPasotti/hooks-to-ops/tree/1-sh-charm]
-[2-py-charm]:[https://github.com/PietroPasotti/hooks-to-ops/tree/2-py-charm]
-[3-py-final]:[https://github.com/PietroPasotti/hooks-to-ops/tree/3-py-final]
+[0-hooks]: [https://github.com/PietroPasotti/hooks-to-ops/tree/0-hooks]
+[1-sh-charm]: [https://github.com/PietroPasotti/hooks-to-ops/tree/1-sh-charm]
+[2-py-charm]: [https://github.com/PietroPasotti/hooks-to-ops/tree/2-py-charm]
+[3-py-final]: [https://github.com/PietroPasotti/hooks-to-ops/tree/3-py-final]
