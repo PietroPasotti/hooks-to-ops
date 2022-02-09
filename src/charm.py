@@ -80,7 +80,7 @@ class Microsample(CharmBase):
         self.wait_service_active()
         self.unit.status = ActiveStatus()
 
-    def _on_config_changed(self, _event):  # noqa
+    def _on_config_changed(self, _event):
         port = self.port
         microsample_snap = snap.SnapCache()["microsample"]
         microsample_snap.set({'port': port, 'address': self.private_address})
@@ -96,16 +96,16 @@ class Microsample(CharmBase):
         # restart the service
         systemd.service_restart("snap.microsample.microsample.service")
 
-    def _on_start(self, _event):  # noqa
+    def _on_start(self, _event): 
         systemd.service_start(self._service_name)
 
-    def _on_stop(self, _event):  # noqa
+    def _on_stop(self, _event):  
         systemd.service_stop(self._service_name)
 
     def _update_app_version(self):
         get_output(f"application-version-set {self._get_microsample_version()}")
 
-    def _on_update_status(self, _event):  # noqa
+    def _on_update_status(self, _event):  
         # this call should probably be put in install/upgrade, since the
         # snap version is unlikely to change on its own
         self._update_app_version()
@@ -120,7 +120,7 @@ class Microsample(CharmBase):
                 f'application not responding at {url}'
             )
 
-    def _on_upgrade_charm(self, _event):  # noqa
+    def _on_upgrade_charm(self, _event): 
         self.unit.status = MaintenanceStatus('Upgrading charm')
         self._on_install(_event)
         self._on_config_changed(_event)
@@ -138,7 +138,7 @@ class Microsample(CharmBase):
     def _on_website_relation_broken(self, _event):  # noqa
         pass  # nothing to do
 
-    def _on_website_relation_changed(self, _event):  # noqa
+    def _on_website_relation_changed(self, _event): 
         relation = self._get_website_relation()
         logger.debug(
             f"{self.unit.name} website settings changed:\n "
@@ -169,10 +169,10 @@ class Microsample(CharmBase):
              'services': services_spec}
         )
 
-    def _on_website_relation_departed(self, _event):  # noqa
+    def _on_website_relation_departed(self, _event): 
         logger.debug(f"{self.unit.name} departed website relation")
 
-    def _on_website_relation_joined(self, _event):  # noqa
+    def _on_website_relation_joined(self, _event): 
         logger.debug(f"{self.unit.name} joined website relation")
 
         relation = self._get_website_relation()
