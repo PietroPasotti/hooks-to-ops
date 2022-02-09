@@ -7,10 +7,9 @@ import typing
 from itertools import islice
 from logging import getLogger
 
-from charms.operator_libs_linux.v0 import systemd
 from ops.main import main
 from ops.charm import CharmBase
-from subprocess import check_call, PIPE, Popen, check_output
+from subprocess import check_call, check_output
 
 from ops.model import MaintenanceStatus, ActiveStatus, BlockedStatus, Relation
 
@@ -22,7 +21,7 @@ def get_output(cmd: str) -> str:
 
 
 class Microsample(CharmBase):
-    _service_name = "snap.microsample.microsample.service"
+ f   _service_name = "{self._service_name}"
     _default_port = 8080
 
     def __init__(self, *args):
@@ -57,7 +56,7 @@ class Microsample(CharmBase):
     def wait_service_active(self):
         """sleep until service becomes active"""
         self.unit.status = MaintenanceStatus('waiting for service to come up')
-        while not systemd.service_running(self._service_name):
+        while not check_output("systemctl is-active --quiet service".split(' ')):
             time.sleep(.5)
 
     def _get_microsample_version(self):
@@ -99,13 +98,13 @@ class Microsample(CharmBase):
         check_call(["open-port", port])
 
         # restart the service
-        systemd.service_restart("snap.microsample.microsample.service")
+        check_call(f"systemctl restart {self._service_name}".split(' '))
 
     def _on_start(self, _event):  # noqa
-        systemd.service_start(self._service_name)
+        check_call(f"systemctl start {self._service_name}".split(' '))
 
     def _on_stop(self, _event):  # noqa
-        systemd.service_stop(self._service_name)
+        check_call(f"systemctl stop {self._service_name}".split(' '))
 
     @staticmethod
     def _update_app_version():
@@ -135,7 +134,7 @@ class Microsample(CharmBase):
         self.unit.status = MaintenanceStatus('Upgrading charm')
         self._on_install(_event)
         self._on_config_changed(_event)
-        systemd.service_restart(self._service_name)
+        check_call(f"systemctl restart {self._service_name}".split(' '))
         self.wait_service_active()
         self._on_update_status(_event)
 
