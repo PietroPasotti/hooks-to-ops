@@ -10,8 +10,7 @@ from logging import getLogger
 from charms.operator_libs_linux.v0 import systemd
 from ops.main import main
 from ops.charm import CharmBase
-from subprocess import check_call, PIPE, Popen, check_output
-import pathlib
+from subprocess import check_call, check_output
 
 from ops.model import MaintenanceStatus, ActiveStatus, BlockedStatus, Relation
 
@@ -20,9 +19,8 @@ from charms.operator_libs_linux.v1 import snap
 logger = getLogger("Microsample")
 
 
-def get_output(cmd):
-    process = Popen(cmd, stdout=PIPE)
-    return process.communicate()[0].decode('ascii')
+def get_output(cmd: str) -> str:
+    return check_output(cmd.split(' ')).decode('ascii')
 
 
 class Microsample(CharmBase):
@@ -104,14 +102,8 @@ class Microsample(CharmBase):
     def _on_stop(self, _event):  # noqa
         systemd.service_stop(self._service_name)
 
-    @staticmethod
-    def _update_app_version():
-        raw = get_output("snap list microsample")
-        data = tuple(filter(None, raw.replace('\n', ' ').split(' ')))
-        assert len(data) == 16, f'microsample not installed, or ' \
-                                f'too many versions are. {data}'
-        snap_version = data[-5]
-        check_call(f"application-version-set {snap_version}")
+    def _update_app_version(self):
+        get_output(f"application-version-set {self._get_microsample_version()}")
 
     def _on_update_status(self, _event):  # noqa
         # this call should probably be put in install/upgrade, since the
