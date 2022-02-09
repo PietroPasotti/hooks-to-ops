@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 import json
 import os
+import subprocess
 import time
 import typing
+from itertools import islice
 from logging import getLogger
 
 from charms.operator_libs_linux.v0 import systemd
@@ -13,7 +15,9 @@ import pathlib
 
 from ops.model import MaintenanceStatus, ActiveStatus, BlockedStatus, Relation
 
-logger = getLogger(__name__)
+from charms.operator_libs_linux.v1 import snap
+
+logger = getLogger("Microsample")
 
 
 def get_output(cmd):
@@ -23,8 +27,6 @@ def get_output(cmd):
 
 class Microsample(CharmBase):
     _service_name = "snap.microsample.microsample.service"
-    _remote_unit = os.environ.get('JUJU_REMOTE_UNIT')
-    _remote_unit_name = os.environ.get('JUJU_UNIT_NAME')
     _default_port = 8080
 
     def __init__(self, *args):
@@ -47,7 +49,10 @@ class Microsample(CharmBase):
 
     @property
     def private_address(self) -> str:
-        return check_output(["unit-get", "private-address"]).decode().strip()
+        """we get the private address by reading it off the 'special' juju-info
+        relation databag
+        """
+        return self.model.get_binding("juju-info").network.bind_address
 
     @property
     def port(self) -> int:
@@ -59,16 +64,28 @@ class Microsample(CharmBase):
         while not systemd.service_running(self._service_name):
             time.sleep(.5)
 
-    def _on_install(self, _event):
-        out = check_call("snap info microsample | grep -c 'installed'")
-        if isinstance(out, bytes):
-            is_microsample_installed = bool(out.decode('ascii').strip())
-        else:  # zero, but to be sure...
-            is_microsample_installed = bool(out)
+    def _get_microsample_version(self):
+        snap_info = get_output("snap info microsample")
 
-        if not is_microsample_installed:
+        def is_version_line(line: str):
+            return line.startswith('installed:')
+
+        flipped_snapinfo_lines = reversed(snap_info.split('\n'))
+        try:
+            version_info = next(filter(is_version_line, flipped_snapinfo_lines))
+        except StopIteration:
+            raise RuntimeError('microsample not installed')
+
+        # version_info format (example) at this stage:
+        # 'installed:          v1.21.9                    (2946) 191MB classic'
+        version = next(islice(filter(None, version_info.split(' ')), 1, None))
+        return version
+
+    def _on_install(self, _event):
+        microsample_snap = snap.SnapCache()["microsample"]
+        if not microsample_snap.present:
             self.unit.status = MaintenanceStatus('installing microsample')
-            out = check_call(["snap install microsample --edge"])
+            microsample_snap.ensure(snap.SnapState.Latest, channel='edge')
 
         self.wait_service_active()
         self.unit.status = ActiveStatus()
@@ -142,14 +159,15 @@ class Microsample(CharmBase):
     def _on_website_relation_changed(self, _event):  # noqa
         relation = self._get_website_relation()
         logger.debug(
-            f"{self._remote_unit} website settings changed:\n "
+            f"{self.unit.name} website settings changed:\n "
             "Relation Settings:\n"
             f"{relation.data}\n"
             "Relation members:"
             f"{relation.units}\n"
         )
         address, port = self.private_address, self.port
-        unit_id = self.unit.name.split('/')[0]
+        # self.unit.name is microsample/
+        unit_id = self.unit.app.name
         # unitid=$(basename $JUJU_UNIT_NAME)
 
         services_spec = {
@@ -170,12 +188,11 @@ class Microsample(CharmBase):
         )
 
     def _on_website_relation_departed(self, _event):  # noqa
-        logger.debug(f"{self._remote_unit} departed website relation")
+        logger.debug(f"{self.unit.name} departed website relation")
 
     def _on_website_relation_joined(self, _event):  # noqa
-        logger.debug(f"{self._remote_unit} joined website relation")
+        logger.debug(f"{self.unit.name} joined website relation")
 
-        # set -e; important here?
         relation = self._get_website_relation()
         relation.data[self.unit].update(
             {'hostname': self.private_address,
