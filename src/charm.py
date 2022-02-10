@@ -8,11 +8,13 @@
 """
 
 import logging
+from urllib.request import Request, urlopen
 
 from ops.charm import CharmBase
 from ops.main import main
 from ops.model import ActiveStatus, MaintenanceStatus, BlockedStatus, Relation
 from subprocess import check_call, check_output
+
 from charms.operator_libs_linux.v0 import systemd
 from charms.operator_libs_linux.v1 import snap
 
@@ -64,6 +66,7 @@ class MicrosampleCharm(CharmBase):
     def _on_config_changed(self, _event):
         """Updates the service on config change.
         """
+        self.unit.status = MaintenanceStatus('Configuring charm')
         # the only config options are port and address, so either 
         # way we always need to update the snap.
         # we assume the snap is smart enough to not restart 
@@ -101,8 +104,7 @@ class MicrosampleCharm(CharmBase):
         # since if the snap.ensure had failed, we would have known at 
         # install time
         url = f"http://{self.private_address}:{self.port}"
-        response = check_output(['curl', '-s', url])
-
+        response = urlopen(Request(url)).read()
         if response:
             self.unit.status = ActiveStatus()
 
@@ -119,6 +121,7 @@ class MicrosampleCharm(CharmBase):
         """Stop the service.
         """
         systemd.service_stop(self._service_name)
+        self.unit.status = ActiveStatus('Service stopped.')
 
     def _on_website_relation_joined(self, _event): 
         """Ensure that the relation databag is up to date, 
