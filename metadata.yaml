@@ -1,6 +1,11 @@
+# Copyright 2022 pietro
+# See LICENSE file for licensing details.
+
+# For a complete list of supported options, see:
+# https://juju.is/docs/sdk/metadata-reference
 name: microsample
-summary: Microsample is a microservice example flask charm.
-maintainer: Erik Lönroth <erik.lonroth@gmail.com>
+display-name: |
+  Microsample (ops)
 description: |
   Microsample installs the microsample snap, which is a snapped flask microservice.
   
@@ -8,10 +13,14 @@ description: |
 
   It also provides the (interface: http) enpoint, which allows you to relate this charm
   with for example an ssl-termination-proxy, haproxy or any other charm that implements the interface: http)
+summary: |
+  Microsample is a microservice example flask charm.
+
 tags:
   - misc
   - development
   - education
+
 subordinate: false
 provides:
   website:

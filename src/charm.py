@@ -1,85 +1,76 @@
 #!/usr/bin/env python3
-import time
-from logging import getLogger
+# Copyright 2022 Erik Lonroth <erik.lonroth@gmail.com>
+# See LICENSE file for licensing details.
+#
+# Learn more at: https://juju.is/docs/sdk
 
-from charms.operator_libs_linux.v0 import systemd
-from ops.main import main
+"""Microsample service charm.
+"""
+
+import logging
+
 from ops.charm import CharmBase
+from ops.main import main
+from ops.model import ActiveStatus, MaintenanceStatus, BlockedStatus, Relation
 from subprocess import check_call, check_output
-
-from ops.model import MaintenanceStatus, ActiveStatus, BlockedStatus, Relation
-
+from charms.operator_libs_linux.v0 import systemd
 from charms.operator_libs_linux.v1 import snap
 
 
-logger = getLogger("Microsample")
+logger = logging.getLogger(__name__)
 
 
 def get_output(cmd: str) -> str:
     return check_output(cmd.split(' ')).decode('ascii')
 
 
-class Microsample(CharmBase):
+class MicrosampleCharm(CharmBase):
+    """Microsample service charm."""
     _service_name = "snap.microsample.microsample.service"
-    _default_port = 8080
-    _default_host = '0.0.0.0'
 
     def __init__(self, *args):
         super().__init__(*args)
         fw = self.framework
-        fw.observe(self.on.config_changed, self._on_config_changed)
         fw.observe(self.on.install, self._on_install)
-        fw.observe(self.on.start, self._on_start)
         fw.observe(self.on.stop, self._on_stop)
+
+        fw.observe(self.on.config_changed, self._on_config_changed)
         fw.observe(self.on.update_status, self._on_update_status)
         fw.observe(self.on.upgrade_charm, self._on_upgrade_charm)
-        fw.observe(self.on.website_relation_broken,
-                   self._on_website_relation_broken)
-        fw.observe(self.on.website_relation_changed,
-                   self._on_website_relation_changed)
-        fw.observe(self.on.website_relation_departed,
-                   self._on_website_relation_departed)
+
         fw.observe(self.on.website_relation_joined,
                    self._on_website_relation_joined)
 
-    @property
-    def private_address(self) -> str:
-        """we get the private address by reading it off the 'special' juju-info
-        relation databag
-        """
-        return self.model.get_binding("juju-info").network.bind_address
-
-    @property
-    def port(self) -> int:
-        return self.config.get('port', self._default_port)
-
-    @property
-    def host(self) -> str:
-        return self.config.get('host', self._default_host)
-
-    def wait_service_active(self):
-        """sleep until service becomes active"""
-        self.unit.status = MaintenanceStatus('waiting for service to come up')
-        while not systemd.service_running(self._service_name):
-            time.sleep(.5)
-
-    def _get_microsample_version(self):
-        microsample_snap = snap.SnapCache()["microsample"]
-        return microsample_snap.channel
+        # TODO: add Requires for HTTP relation
 
     def _on_install(self, _event):
-        microsample_snap = snap.SnapCache()["microsample"]
-        if not microsample_snap.present:
-            self.unit.status = MaintenanceStatus('installing microsample')
-            microsample_snap.ensure(snap.SnapState.Latest, channel='edge')
+        """Install and start the microsample snap.
+        """
+        
+        self.unit.status = MaintenanceStatus('installing microsample')
+        # this will automatically start the service.
+        microsample_snap = self._refresh_snap()
 
-        self.wait_service_active()
+        # snap.channel is actually a version string e.g. "v10.1"
+        # this might fire a "socket.timeout: timed out" error
+        # if the snap hasn't quite finished installing yet.
+        check_call(["application-version-set", 
+                    microsample_snap.channel.strip('v')])
+
+        # might be a few seconds before the service 
+        # actually comes up in the background
         self.unit.status = ActiveStatus()
 
     def _on_config_changed(self, _event):
+        """Updates the service on config change.
+        """
+        # the only config options are port and address, so either 
+        # way we always need to update the snap.
+        # we assume the snap is smart enough to not restart 
+        # if the values aren't *actually* different.
         port = self.port
         microsample_snap = snap.SnapCache()["microsample"]
-        microsample_snap.set({'port': port, 'address': self.private_address})
+        microsample_snap.set({'port': port, 'address': self.host})
 
         # ensure all opened ports are closed #idempotence
         open_ports = get_output('opened-ports')
@@ -92,66 +83,67 @@ class Microsample(CharmBase):
         # restart the service
         systemd.service_restart("snap.microsample.microsample.service")
 
-    def _on_start(self, _event): 
-        systemd.service_start(self._service_name)
+        # port and host have an impact on relation data, so *if* we do 
+        # have a website relation, we need to update its databag
+        if relation := self._get_website_relation():
+            relation.data[self.unit].update(
+                {'hostname': self.private_address,
+                'port': self.port}
+            )
 
-    def _on_stop(self, _event):  
-        systemd.service_stop(self._service_name)
-
-    def _update_app_version(self):
-        get_output(f"application-version-set {self._get_microsample_version()}")
+        self.unit.status = ActiveStatus()
 
     def _on_update_status(self, _event):  
-        # this call should probably be put in install/upgrade, since the
-        # snap version is unlikely to change on its own
-        self._update_app_version()
-
+        """Periodically check that the service is accessible.
+        """
+        # note that this is not at all mandatory, only a demonstration. 
+        # We could just as well assume that the service is up and running, 
+        # since if the snap.ensure had failed, we would have known at 
+        # install time
         url = f"http://{self.private_address}:{self.port}"
         response = check_output(['curl', '-s', url])
 
         if response:
             self.unit.status = ActiveStatus()
-        else:
-            self.unit.status = BlockedStatus(
-                f'application not responding at {url}'
-            )
+
+        self.unit.status = BlockedStatus(f'application not responding at {url}')
 
     def _on_upgrade_charm(self, _event): 
-        self.unit.status = MaintenanceStatus('Upgrading charm')
-        self._on_install(_event)
-        self._on_config_changed(_event)
-        systemd.service_restart(self._service_name)
-        self.wait_service_active()
-        self._on_update_status(_event)
-
-    def _get_website_relation(self) -> Relation:
-        """Helper function for obtaining the website relation object.
-        Returns: relation object
-        (NOTE: would return None if called too early, e.g. during install).
+        """Ensures that the snap is at its latest version.
         """
-        return self.model.get_relation('website')
+        self.unit.status = MaintenanceStatus('Upgrading charm')
+        self._refresh_snap()
+        self.unit.status = ActiveStatus()
 
-    def _on_website_relation_broken(self, _event):  # noqa
-        pass  # nothing to do
+    def _on_stop(self, _event):  
+        """Stop the service.
+        """
+        systemd.service_stop(self._service_name)
 
-    def _on_website_relation_changed(self, _event): 
+    def _on_website_relation_joined(self, _event): 
+        """Ensure that the relation databag is up to date, 
+        whenever the relation is joined.
+        """
+        self._update_relation_data()
+
+    def _update_relation_data(self):
+        """Ensure that the relation databag is up to date.
+        """
         relation = self._get_website_relation()
         logger.debug(
-            f"{self.unit.name} website settings changed:\n "
-            "Relation Settings:\n"
+            f"{self.unit.name} website settings:\n "
             f"{relation.data}\n"
             "Relation members:"
             f"{relation.units}\n"
         )
         address, port = self.private_address, self.port
-        # self.unit.name is microsample/
-        unit_id = self.unit.app.name
-        # unitid=$(basename $JUJU_UNIT_NAME)
 
+        # self.unit.name is microsample/0
+        unit_id = self.unit.app.name
         services_spec = {
             '_service_name': 'microsample',
             'service_host': self.host,
-            'service_port': self.port,
+            'service_port': port,
             'service_options': [
                 'mode http', 'balance leastconn',
                 'http-check expect rstring ^Online$'],
@@ -165,18 +157,40 @@ class Microsample(CharmBase):
              'services': services_spec}
         )
 
-    def _on_website_relation_departed(self, _event): 
-        logger.debug(f"{self.unit.name} departed website relation")
+    # UTILITIES
+    @staticmethod
+    def _refresh_snap() -> snap.Snap:
+        """Ensures that the snap is at its latest version.
+        """
+        microsample_snap = snap.SnapCache()["microsample"]
+        microsample_snap.ensure(snap.SnapState.Latest, channel='edge') 
+        return microsample_snap
 
-    def _on_website_relation_joined(self, _event): 
-        logger.debug(f"{self.unit.name} joined website relation")
+    def _get_website_relation(self) -> Relation:
+        """Return the website relation object.
+        NOTE: would return None if called too early, e.g. during install.
+        """
+        return self.model.get_relation('website')
 
-        relation = self._get_website_relation()
-        relation.data[self.unit].update(
-            {'hostname': self.private_address,
-             'port': self.port}
-        )
+    @property
+    def private_address(self) -> str:
+        """we get the private address by reading it off the 'special' juju-info
+        relation databag
+        """
+        return self.model.get_binding("juju-info").network.bind_address
+
+    @property
+    def port(self) -> int:
+        """The port on which the microserver service will be listening.
+        """
+        return self.config['port']
+
+    @property
+    def host(self) -> str:
+        """The host on which the microserver service will be listening.
+        """
+        return self.config['host']
 
 
 if __name__ == "__main__":
-    main(Microsample)
+    main(MicrosampleCharm)
