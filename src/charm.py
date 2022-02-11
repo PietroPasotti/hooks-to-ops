@@ -8,6 +8,7 @@
 """
 
 import logging
+from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from ops.charm import CharmBase
@@ -104,11 +105,19 @@ class MicrosampleCharm(CharmBase):
         # since if the snap.ensure had failed, we would have known at 
         # install time
         url = f"http://{self.private_address}:{self.port}"
-        response = urlopen(Request(url)).read()
-        if response:
-            self.unit.status = ActiveStatus()
+        error = None
 
-        self.unit.status = BlockedStatus(f'application not responding at {url}')
+        try:
+            response = urlopen(Request(url)).read()
+        except URLError as e:
+            error = e
+            
+        if error or not response:
+            self.unit.status = BlockedStatus(
+                f'application not responding at {url}; {error}'
+                )
+        
+        self.unit.status = ActiveStatus()
 
     def _on_upgrade_charm(self, _event): 
         """Ensures that the snap is at its latest version.
